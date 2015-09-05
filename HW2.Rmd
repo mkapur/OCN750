@@ -158,5 +158,4 @@ minor.tick(nx = 4)
 #It appears that at all except very small prey densities, an increased attack rate (a) would have a much greater benefit than decreasing your handling time. At low prey densities, e.g. <0.25, they seem comprable.
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
