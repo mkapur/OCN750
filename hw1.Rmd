@@ -1,6 +1,6 @@
 ---
 title: 'OCN 750: Homework 1 -- Maia Kapur'
-output: html_document
+output: word_document
 ---
 
 This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
@@ -9,16 +9,16 @@ When you click the **Knit** button a document will be generated that includes bo
 
 ```{r}
 #Load Required Packages
-#library(stats)
-#library(dplyr)
-#library(tidyr)
-#library(car)
-#library(reshape2)
-#library(data.table)
-#library(effects)
-#library(gdata)
-#library(ggplot2)
-#library(lmtest)
+library(stats)
+library(dplyr)
+library(tidyr)
+library(car)
+library(reshape2)
+library(data.table)
+library(effects)
+library(gdata)
+library(ggplot2)
+library(lmtest)
 
 #Set Working Directory
 setwd("~/Dropbox/2015 Fall/OCN 750")
@@ -30,17 +30,50 @@ setwd("~/Dropbox/2015 Fall/OCN 750")
 #Load appropriate CSV
 labcult = read.csv("lab_cultures.csv")
 ```{r, echo=TRUE}
-boxplot(labcult$Length..mm. ~ labcult$Sex*labcult$Region,
-         main = "Mean Isopod Length by Sex and Region",
-         ylab = "mean length (mm)")    
+
+#find means for sex and region
+means = aggregate(formula = Length..mm. ~ Sex + Region, data = labcult, FUN = mean)
+
+#calculate standard error for sex and region
+se = aggregate(formula = Length..mm. ~ Sex + Region, data = labcult, FUN = function(x) sqrt(var(x)/length(x)) )
+
+#create a list that contains the values from the above functions
+mean = c(means$Length..mm.)
+ses = c(se$Length..mm.)
+
+#designate the maximum and minimum values each test into an aes command - this makes
+#the ggplot code easier to write
+
+limits <- aes(ymax = mean + ses, ymin = mean - ses)
+
+#create a data frame that includes all the data you need to plot.
+#the melt function can quickly lay out your cross -interactions between the 
+#Region and sex variables
+df = melt(data.frame(NORTH = c(15.63, 18.8), SOUTH = c(14.1, 17.0),
+    experiment = c("F", "M"),
+    variable_name = "metric"))
+
+#plot it, telling ggplot to call from the dataframe (df) you just created
+#with Region ("variable") on the x - axis, Length ("value") on the Y, and filled by 
+#Sex ("experiment")
+ggplot(df, aes(x = variable, value, fill = experiment)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_errorbar(limits, position = "dodge") +
+  xlab("Region") +
+  ylab("Length")
+
+
 ```
+
 
 #### 2. Use lm(), and F-tests on the model, to test whether there is a significant difference between Sexes in mean length, whether there is a significant difference between Regions in mean length, and whether the effect of Region differs between Sexes. Report F-statistics and degrees of freedom. How do you interpret these results?
 
 ```{r}
 #Generate a linear model for variables of interest, testing for an interaction between the Sex and Region Factors
 lsr.noint = lm(labcult$Length..mm. ~ labcult$Region)
-lsr.interaction = lm(labcult$Length..mm. ~ labcult$Sex*labcult$Region)
+lsr.interaction = lm(Length..mm. ~ Sex*Region, data = labcult)
+culteff = effect("Sex*Region", lsr.interaction)
+
 #Run ANOVA test using car package to examine significant differences
 Anova(lsr.interaction)     
 #See F-statistics and Degrees of Freedom in above output.
@@ -51,6 +84,7 @@ Anova(lsr.interaction)
 #### 3 Plot the model-fitted group means and standard errors.
 
 ```{r, echo = TRUE}
+plot(culteff)
 ```
 
 #### 4: Using the “Egg Data” worksheet, plot Number of Eggs vs. Length, and color code the plotted points by Region.
@@ -93,6 +127,8 @@ lmr = lm(Number.of.Eggs ~ Length..mm.*Region, data = eggs) #All Regions
 lmn = lm(north$Number.of.Eggs ~ north$Length..mm.) #Just the North
 lms = lm(south$Number.of.Eggs ~ south$Length..mm.) #Just the South
 Anova(lmr)
+summary(lmr)
+#There is a significant difference for No. Eggs across lengths and among the two regions.
 ```
 
 ####6. For #5 you have essentially fit two linear regressions, one for each Region. Take your plot from #4 and add these two lines. abline() will help.
@@ -117,6 +153,7 @@ abline(0,0)
 
 #The residuals themselves appear normally distributed, with deviation from normality at the tails of the distribution.
 ```
+
 #Variance of Residuals vs Length
 ```{r, echo = TRUE}
 #Calculate model residuals & add to data frame
@@ -131,4 +168,9 @@ abline(0,0)
 
 #Variance of Residuals between Regions
 ```{r, echo=TRUE}
+boxplot(eggs$lmr.residual ~ eggs$Region,
+        main = "Variance of Residuals between Regions",
+        ylab = "residuals",
+        xlab = "region")
 ```
+
