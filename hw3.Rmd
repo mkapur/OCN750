@@ -1,0 +1,114 @@
+---
+title: "OCN 750 - Homework 3"
+author: "Maia Kapur"
+date: "September 14, 2015"
+output: pdf_document
+---
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+setwd("~/Dropbox/2015 Fall/OCN 750")
+chan = read.csv("channel_islands.csv")
+```
+
+####For each year, draw a scatterplot that compares the abundance of Paralabrax clathratus (adults) and the abundance of Embiotoca jacksoni (adults) across site. Feel free to transform the data for plotting purposes, if you think that helps you see any patterns. 
+#####In some years, counts were performed twice at each site. For those years, find the mean count at each site for the two species, and plot those means instead of the raw counts.
+#####Furthermore, only draw the plot if the two species co-occur (have abundance > 0) in at least 6 sites during that year. (We aren’t interested in making comparisons when most of the data is zeros). 
+
+```{r, echo = FALSE}
+#This is a pretty messy way of going about it.
+
+#Isolate species of interest, and counts greater than zero
+chan2 = subset(chan, subset = SpeciesName %in% c("Embiotoca jacksoni, adult", "Paralabrax clathratus, adult"))
+
+
+#sort by year for easy viewing
+chan3 = chan3[order(chan3$Year),]
+
+#To take mean of sites with >2 counts in a given year, we simply aggregate the data for each site in a given year and take the mean. Sites with only one count in a given year, e.g. site 8 in 1985, will return that value divided by one. We now have a single row for each site during each year, with two different data frames (one for each species)
+chan3 = aggregate(count ~ SpeciesName * Year * Site, data = chan2, mean)
+
+
+
+#Create a data frame that says how often a survey occurs at that site for that year.
+#Counts of 1 indicate that only one spp. has data for that site for that year, so we only want to keep those with a frequency of 2. 
+library(plyr)
+cts = count(chan3, c("Year", "Site"))
+
+#this vector records years and sites for which there were >2 records (the species were co-ocurring).
+cts = subset(cts, freq == 2)
+
+
+#Now we need a vector of years in which the species co-occur.
+#Create vector of every year included in the dataset, for testing purposes
+yrs = seq(1985,2011,1)
+
+
+
+#an empty vector, to fill with values
+cooc.years = NULL
+
+ a for loop to check co-occurence and create a vector
+for (k in yrs) {
+  #check if the length of the co-ocurrance vector is >= 6 (e.g. they co-occured at least 6 times)
+  if (nrow(cts[cts$Year == k,]) >= 6) {
+  cooc.years = rbind(cooc.years, k)
+  }
+  }
+
+#Looks like they have overlap through year 2004.
+
+#take out non-co-occuring years from original data frame
+chan4 = chan3[ chan3$Year %in% cooc.years, ]
+chan4 = subset(chan4, chan4$count != 0)
+
+#Create separate datasets for each species
+para3 = subset(chan2, SpeciesName == "Paralabrax clathratus, adult")
+embi3 = subset(chan2, SpeciesName = "Embiotoca jacksoni, adult")
+#To take mean of sites with >2 counts in a given year, we simply aggregate the data for each site in a given year and take the mean. Sites with only one count in a given year, e.g. site 8 in 1985, will return that value divided by one. We now have a single row for each site during each year, with two different data frames (one for each species)
+
+para3 = aggregate(count ~ Site * Year, data = para3, mean)
+embi3 = aggregate(count ~ Site * Year, data = embi3, mean)
+
+par(mfrow = c(4,5))
+ymax = (c(d$count, a$count))
+for (n in 1985:2004) {
+  d = subset(para3, Year == n)
+  a = subset(embi3, Year == n)
+  if (sum(d$count != 0 & a$count != 0) > 5 ) {
+  plot(d$count ~ a$count, main = n, col = "blue", ylab = "P. clathratus", xlab = "E. jacksoni", ymax = c(0,ymax))
+  abline(0,1)
+  #points(d$Site, d$count, xlim = c(0,15), col = "Coral", pch = 15)
+}
+}
+
+```
+
+#####For each year that you plot, also calculate the spearman rank correlation between the the abundances of the two species. Make a second plot that is a histogram of all the correlation coefficients. 
+
+```{r, echo=FALSE}
+
+
+#Run a similar for-loop to calculate spearman-rank correlations for each year, and generate a vector of these values. The spearman function is part of the Hmisc package.
+dev.off()
+library(Hmisc)
+
+par(mfrow = c(1,1))
+
+speran = NULL
+for (k in 1985:2004){
+  m = subset(chan4, chan4$Year == k)
+  output = spearman(m$SpeciesName, m$count)
+  speran = rbind(speran, output)
+}
+speran = as.data.frame(speran)
+View(speran)
+hist(as.numeric(speran$rho), breaks = 10, main = "Frequency of Spearman-Rank Coefficients", col = "blue", xlab = "rho")
+
+#By visual inspection, it appears that there is a slight trend favoring abundance of E. Jacksoni. The rho values appear bi-modally distributed on either site of zero, which may account for the early years in which P. calthanthus was more abundant (negative correlation), a trend that reversed around 1992. 
+
+```
+
