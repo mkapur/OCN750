@@ -1,0 +1,114 @@
+
+```{r}
+library(mgcv)
+library(foreach)
+library(fields)
+library(MuMIn)
+library(geoR)
+library(sp)
+
+
+coy = read.csv("wolf_coyote_hybrids.csv")
+names(coy)[4] <- "ancestry"
+
+mod  = gam(ancestry ~ s(east, north),   data    = coy)
+
+## plot of heatmap + contours.
+## colors represent high - lo % ancenstry
+par(mfrow = c(2,2))
+plot(mod,   select  = 1,    scheme  = 2,    lwd = 2, rug = T)
+lines(mod$north,mod$east,   col = 'grey')
+
+plot(mod,select =1,lwd=2,scheme=0,rug=F,se=T,labcex=0.8)
+lines(mod$north,mod$east, col='grey')
+
+plot(mod,select=1,lwd=2,scheme=0,rug=F,se=F,labcex=0.8)
+lines(mod$north,mod$east,col='grey')
+
+plot(mod,select=1,scheme=1,theta=30,col='skyblue',phi=40)
+plot(gm,select=1,scheme=2,lwd=2)
+lines(mod$north,mod$east,col='grey')
+
+## It doesn't appear perfect, but I could envision a ~5th order polynomial may fit. I'd characterize it as a definite spatial pattern with patches of distinct populations. The residuals have no pattern, which is good
+gam.check(mod)
+To get at question 2, we need a new variable that measures distance from APP. Let's say the center of APP is at the coordinates 1440000 east, 12160000 north. Make a new column where you calculate the euclidean distance between each individual and the center of APP.
+
+I've included four methods to do so. Keep in mind that minor differences between output methods have to do with the behind-the-scenes way that each function deals with rounding up/down of very small or large values, which can occur with coordinates often. 1. A hard coded euclidian distance function, implemented in the foreach() looping framework: 2. A more traditional loop application of the same euclidian distance function, similar but not identical values. Both of these are incorrect according to Kyle 3. An application of rdist from the fields package which oddly results in the same/similar values. 4. Kyle's form, which is mathematically correct, however.when in doubt, go with his. I compare them three at the bottom; the rest of this code is using Kyle's output (ke.dist).
+
+Hide
+
+## Original Submission (to which Kyle said "something looks off") -----------------
+## a vector of E/N coordinates paired by column
+x1 <- matrix(c(coy$east, coy$north), ncol = 85, byrow = T) 
+## a vector of the APP center, same length as x1
+app = rbind(rep(c(144000),85),rep(c(12160000),85)) 
+## a function to calculate distance between two points
+euc.dist <- function(x1, x2) sqrt(sum((x1 - x2) ^ 2)) 
+## create a new column to original df with the distance between each row pair (each column) and the APP center
+loop1 = foreach(i = 1:85, .combine = c ) %do% euc.dist(x1[,i],app[,i]) 
+
+## the same idea as above using a loop
+dist <- NULL
+for(i in 1:ncol(x1)) dist[i] <- euc.dist(x1[,i],app[,i])
+loop2 = dist[1:3]
+
+## Fields package (same results as above) -----------------------
+x1 = cbind(coy$east,coy$north)
+x2 = cbind(rep(c(144000),85),rep(c(12160000),85))
+r.dist = rdist(x1,x2)[1:5]
+
+## Kyle's Approach (mean -centered distance) -----------------
+dist = sqrt((coy$east - 1440000)^2 + (coy$north - 12160000)^2)
+## a vector of E/N coordinates paired by column
+ke.dist <- dist
+
+cbind(loop1,loop2,r.dist,ke.dist)[1:5,1:4]
+Now make a GAM where % ancestry is a smooth function of distance from APP. Do you think this model supports the idea that the relative contribution of coyotes vs. wolves is primarily affected by this park? How does the % deviance explained compare between this model and the model where you fit a 2D smoother to the data? How does estimated degrees of freedom and AICc compare between the two models? How do you interpret these results?
+
+You can just juse summary(mod), but I made my own comparison chart since it's easier to read.
+
+Question 3 can be addressed by using the environmental predictors in a model. Coyotes are more tolerant of disturbed/human habitats, so predictors like road density (a proxy for human impact) might explain % ancestry. Deer are eaten by both coyotes and wolves, while moose are taken primarily by wolves. Make a GAM where % coyote ancestry is the response, and the predictors are the three road variables, plus deer, moose, and StudyArea. Use a smoother for each predictor (except StudyArea), to see whether it looks like the effect is linear or nonlinear. You may want to transform SecondaryRds, because it has a very skewed distribution. Which of the predictors explain significant variation? Plot the fitted effects, and interpret thirst.
+
+My first submission did a weird log-transform and replace with zero thing.per Kyle's suggestion, these values are squareroot transformed
+
+Hide
+## transform secondary roads
+coy$SecondaryRds.tr <- sqrt(coy$SecondaryRds)
+
+mod3 = gam(ancestry ~ StudyArea + s(SecondaryRds.tr) + s(PrimaryRds) + s(TertiaryRds) + s(Deer) + s(Moose),  data = coy)
+## Moose is the only predictor that explains significant variation.
+
+par(mfrow  = c(2,3))
+plot(mod3,  select  = 1,    residuals   = T,    shade.col   = 'lavenderblush3', shade   = T,    col = 'black')
+plot(mod3,  select  = 2,    residuals   = T,    shade.col   = 'lavenderblush3', shade   = T,    col = 'black')
+plot(mod3,  select  = 3,    residuals   = T,    shade.col   = 'lavenderblush3', shade   = T,    col = 'black')
+plot(mod3,  select  = 4,    residuals   = T,    shade.col   = 'lavenderblush3', shade   = T,    col = 'black')
+plot(mod3,  select  = 5,    residuals   = T,    shade.col   = 'lavenderblush3', shade   = T,    col = 'black')
+Amend the model you just made to include an interaction between the smoother for tertiary roads and StudyArea. Does it look like the interaction is important? How does this model compare based on AICc? What do you think the interaction means? Consider that wolves and coyotes may be differentially susceptible to human effects.
+
+Hide
+mod4 = gam(ancestry ~ s(SecondaryRds) + s(PrimaryRds) + s(TertiaryRds, by = StudyArea) + s(Deer) + s(Moose),  data = coy)
+summary(mod4) 
+## Tertiary Rds interaction with APP is significant. Which makes sense as % ancestry may be driven more strongly by human presence (favoring coyotes) than simply available prey (moose v deer)
+AICc(mod4) 
+## a lower AICc value than the previous two models
+Based on the code from the lecture notes, plot a bubble plot and semivariogram of the residuals of the model that includes the TertiaryRds*StudyArea interaction. Does it look like the residuals are spatially autocorrelated? Now make a new model that adds in the 2D spatial smoother that you used previously. Compare the evidence for spatial autocorrelation between this model and the model without the smoother. Does accounting for autocorrelation with the 2D smoother change whether you think the other predictors are important?
+
+Hide
+## bubble plot of mod4
+
+dat <- data.frame(lon  = coy$east,  lat = coy$north,    resids=resid(mod4,  type    = 'pearson'))
+coordinates(dat)<-c('lon','lat')
+bubble(dat,zcol='resids')
+## It looks like there is a spatial correlation.
+
+mod5 = gam(ancestry ~ s(SecondaryRds) + s(PrimaryRds) + s(TertiaryRds, by = StudyArea) + s(Deer) + s(Moose) + s(east, north),  data = coy) ## a model with the 2D smoother as well, which is also considered significant. Moose remains the only significant predictor other than tertiaryrds/study area. So, I think the other predictors are less important than spatial ones.
+dat<-data.frame(lon  = coy$east,  lat   = coy$north,    resids=resid(mod5,  type    = 'pearson'))
+coordinates(dat)<-c('lon','lat')
+bubble(dat,zcol='resids')
+
+v1  <- variog(coords    = coy[,c('north','east')],  data    = residuals(mod4,   type = 'pearson'))
+plot(v1)
+
+v2  <- variog(coords  = coy[,c('north','east')],    data    = residuals(mod5,   type = 'pearson'))
+plot(v2)

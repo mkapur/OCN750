@@ -1,0 +1,159 @@
+---
+title: "OCN 750 - HW8"
+author: "Maia Kapur"
+date: "October 17, 2015"
+output: pdf_document
+---
+
+####Fit these three curves to the dataset ‘psittacosaurus.csv’, using nls() as described in lecture. You’ll need to supply start values for the parameters, which may be tricky. If you get error messages when trying to fit the model, use trial-and-error, or try plotting what the curve looks like with different parameter values to come up with reasonable guesses. For each model report the coefficient estimates and confidence intervals, and plot the fitted curves on top of the raw data.
+
+```{r, warning = FALSE, message = FALSE}
+setwd("~/Dropbox/2015 Fall/OCN 750/hw8")
+dinos = read.csv("psittacosaurus.csv")
+
+#establish NLS models for each equation
+linear  = nls(Mass ~ a + b*Age,	data	= dinos, 
+              start	= list(a	= 0,	b = 3))
+
+exponential = nls(Mass ~ a*exp(r*Age), data  = dinos, 
+                  start	= list(a	= 1,	r	= 1/4))
+
+logistic = nls(Mass ~ m/(1+exp(-r*(Age-z))), data = dinos,
+               start	= list(m	= 30,	r	= 0.25, z = 9)) 
+#z - age0 or POI, m = maximum size
+
+#report coefficient estimates
+linear.coeff = summary(linear)[10]
+exponential.coeff = summary(exponential)[10]
+logistic.coeff = summary(logistic)[10]
+c(linear.coeff, exponential.coeff, logistic.coeff)
+
+#report confidence intervals
+require(MASS)
+confint(linear)
+confint(exponential)
+confint(logistic)
+
+plot(Mass ~ Age, data = dinos, pch = 19, main = "mass vs age", col = "darkseagreen3")
+lines(dinos$Age, predict(linear), col = "dodgerblue", lwd = 3)
+lines(dinos$Age, predict(exponential), col = "dodgerblue4", lwd = 3)
+lines(dinos$Age, predict(logistic), col = "firebrick1", lwd = 3)
+legend(1,30, legend = c("linear", "exponential", "logistic"), 
+       lty = c(1,1,1), lwd = 3, col = c("dodgerblue", "dodgerblue4", "firebrick1"))
+```
+
+####Compare the three models using AICc. Which model is the best?  What are the dAICc values and the Akaike weights for the three models? How do you interpret these results in terms of the relative support for the three models?
+
+```{r, warning = FALSE, message = FALSE}
+require(MuMIn)
+AICc(linear)
+AICc(exponential)
+AICc(logistic) 
+#logistic is smallest AIC values; others constitute "candidate set". 
+#So calculate delta-i by comparing each model to logistic
+
+#use  delta-AIC	to	calculate	the	model	likelihoods
+model.like.1 = exp(-0.5*(AICc(linear)	- AICc(logistic)))
+model.like.2 = exp(-0.5*(AICc(exponential)	- AICc(logistic)))
+model.like.3 = exp(-0.5*(AICc(logistic)	- AICc(logistic)))
+#sum	the	model	likelihoods	for	standardization
+summed.likes	= sum(c(model.like.1,	model.like.2,	model.like.3))
+#calculate	the	Akaike	weights
+weight1	= model.like.1/summed.likes
+weight2	= model.like.2/summed.likes
+weight3	= model.like.3/summed.likes
+
+weights = rbind(weight1,weight2,weight3)
+deltas = rbind(model.like.1, model.like.2, model.like.3)
+mods = rbind("linear", "exponential", "logistic")
+table <- as.data.frame(cbind(mods, deltas, weights))
+names(table)[1:3] = c("model","delta", "weight")
+table
+
+#the best-supported model is model 3, the logistic (row 3). This also makes sense visually.
+```
+
+####What is the estimated exponential growth rate (r) for the exponential and logistic models? What is the confidence interval on this parameter for the two models? For exponential growth, the doubling time is log(2)/r. How long does it take the dinosaur to double in size, based on the two models?
+
+```{r}
+#what is r for exponential model?
+summary(exponential)[10]
+#confidence interval
+confint(exponential)[2,]
+log(2)/0.3276649 #doubling time for exponential model
+
+#what is r for logistic model?
+summary(logistic)[10]
+#confidence interval
+confint(logistic)[1,]
+log(2)/0.5125395 #doubling time for logistic model
+
+```
+
+####Is there evidence that this dinosaur has a maximum size? If so, what is the estimate for that size, and what is the confidence interval around that estimate? How does the estimated maximum size compare to the largest size in the data? How much stock do you put in the Mmax estimate, given the data we have? If this estimate of Mmax is true, about how big does this dinosaur get, relative to a human?
+
+```{r}
+#the evidence would be in the fact that the logistic model best fits the data, which obviously 
+#has a point where it plateaus. 
+#It also fits other empirical growth models that dinos would have a max value.
+
+max(dinos$Mass) #data's maximum size
+(summary(logistic))[10]
+42.9923208 #model estimate for Mmax *it's greater*
+confint(logistic)[1,] #confidence interval for Mmax *seems pretty large as well*
+#if Mass is in KG, the high end of the Mmax estimate (~51 kg) doesn't seem much larger than a female human, 
+#though I'd imagine most dinosaurs were a lot bigger? 
+#80 samples isn't so much compared to the # samples we have for other animals (like fish) for which we've established size ranges.
+
+```
+
+####Now compare the three models using leave-one-out cross-validation. Which model is the best at predicting the data, in terms of LOOCV? 
+
+```{r}
+errors  = vector()
+#the	loop:	N	for	total	number	of	observations (80 in dataset)
+for	(i	in	1:80)	{
+		#make	a	dataframe that	removes	observation	i
+		datause	=	dinos[-i,]
+		#fitthe	cubic	polynomial	model
+		mod	= linear
+		#calculate	the	prediction	error	for	the	withheld	observation
+		data.topredict	=	data.frame(Age	=	dinos$Age[i])
+    errors[i]	= dinos$Mass[i]	- predict(mod,	newdata	= data.topredict)
+}
+#calculate	the	root	mean squared	prediction	error
+lin.err = sqrt(mean(errors^2))
+
+#the  loop:	N	for	total	number	of	observations (80 in dataset)
+for	(i	in	1:80)	{
+		#make	a	dataframe that	removes	observation	i
+		datause	=	dinos[-i,]
+		#fitthe	cubic	polynomial	model
+		mod	= exponential
+		#calculate	the	prediction	error	for	the	withheld	observation
+		data.topredict	=	data.frame(Age	=	dinos$Age[i])
+    errors[i]	= dinos$Mass[i]	- predict(mod,	newdata	= data.topredict)
+}
+#calculate	the	root	mean squared	prediction	error
+exp.err = sqrt(mean(errors^2))
+
+#the  loop:  N	for	total	number	of	observations (80 in dataset)
+for	(i	in	1:80)	{
+		#make	a	dataframe that	removes	observation	i
+		datause	=	dinos[-i,]
+		#fitthe	cubic	polynomial	model
+		mod	= logistic
+		#calculate	the	prediction	error	for	the	withheld	observation
+		data.topredict	=	data.frame(Age	=	dinos$Age[i])
+    errors[i]	= dinos$Mass[i]	- predict(mod,	newdata	= data.topredict)
+}
+#calculate	the	root	mean squared	prediction	error
+log.err = sqrt(mean(errors^2))
+```
+
+####What is the typical difference between the predicted values and the observed values for the best model? Does cross-validation yield the same ranking of models as AICc?
+```{r}
+cbind(lin.err, exp.err, log.err)
+#as expected, the logistic model produced the lowest LMSE and therefore is the best  at predicting the data according to LOOCV. The typical difference is ~1, and this yeilds the same ranking as AICc.
+```
+

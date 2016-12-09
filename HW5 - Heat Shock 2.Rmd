@@ -1,0 +1,163 @@
+---
+title: "OCN 750 HW5 -- Flatfish and Heat Shock II"
+author: "Maia Kapur"
+date: "September 23, 2015"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+solea = read.table("C://Users/Maia.Kapur/Documents/hw5/Solea.txt", header = TRUE)
+```
+#####Plot the raw data of sole presence/absence vs. salinity. Break the salinity data into four equally sized bins, and within each bin calculate the proportion of presences. Plot the binned proportions vs. the midpoints of the bins (e.g. if the bin is from 3 to 7, then 5 is the midpoint). Also calculate the standard error of the proportion for each bin, and plot that with error bars. 
+```{r, warning=FALSE, message=FALSE} 
+#define  8	bins,	using	a	sequence	of	4	breaks
+breaks	= with(solea,	seq(min(salinity),	max(salinity),	length	= 5))
+#make	a	binning	factor	from	logPar
+cut.sal	= cut(solea$salinity,	breaks	= breaks)
+#calculate	the	proportion	of	presence	by	bin
+means	= with(solea,	tapply(Solea_solea,	cut.sal,	mean))
+#function  for	the	standard	error	of	a	binary	variable
+binomial.SE	= function(x)	sqrt((mean(x)*(1-mean(x)))/length(x))
+#calculate	the	standard	error	for	each	bin
+ses	= with(solea,	tapply(Solea_solea,	cut.sal,	binomial.SE))
+#plot the raw data
+plot(solea$Solea_solea ~ solea$salinity, 
+     main = "proportional survivorship vs. salinity, solea",  
+     ylab = "proportion of survivorship", 
+     col = "lavenderblush3", pch = 19, col.main = "hotpink4")
+#plot  the	bin	means
+points(means	~ breaks[1:4],	pch	= 19,	ylim	= c(0,1),	xlim	=
+range(solea$salinity))
+#plot	the	bin	SEs
+segments(breaks[1:4],	means+ses,	breaks[1:4],	means-ses)
+
+```
+#####Fit a binomial glm to test whether presence/absence of sole is driven by salinity.
+#####Use curve() to plot the fitted logistic relationship on the same plot as the raw data.
+```{r, warning=FALSE, message=FALSE}
+##create binomial model
+mod = glm(Solea_solea ~ salinity, data = solea, family = binomial)
+summary(mod)
+##define logistic function
+logistic  = function(x)	exp(x)/(1+exp(x))
+
+##plot	the	raw data and add on the fittedcurves
+plot(Solea_solea ~ salinity, data = solea, 
+     main = "proportional survivorship vs. salinity, solea",  
+     ylab = "proportion of survivorship", col = "cadetblue4", 
+     pch = 19, col.main = "cadetblue3")
+curve(logistic(coef(mod)[1]+coef(mod)[2]*x),	add	= T,	col	= 'cadetblue3',	lwd	= 3)
+```
+#####What is the effect of salinity on sole presence/absence? Would you consider it a strong effect or a weak effect? Why?
+```{r, warning=FALSE, message=FALSE}
+##It looks to be a gentle yet definite effect. 
+##The model summary indicates a high AIC for the salinity variable.
+```
+#####Do a likelihood ratio test to see whether the effect of salinity is significant.
+```{r, warning=FALSE, message=FALSE}
+require(car)
+Anova(mod) ##it's significant
+```
+
+#####Examine a plot of residuals (deviance residuals or pearson residuals) vs. predicted values. How would you interpret this plot?
+```{r}
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+
+plot(residuals(mod, family = "pearson") ~ solea$salinity, 
+     xlab = "salinity, raw values", 
+     ylab = "pearson residuals", main = "Deviance Residuals vs. Predicted Values", 
+     col = "darkorange2", col.main = "darkorange4")
+
+##This plot depics a quasi-linear trend in residual distribution, which is expected for log predictors.
+```
+
+#####Make an exploratory plot of proportion of survivors vs. sex*region.
+
+
+```{r, warning=FALSE, message=FALSE, echo = TRUE}
+hs = read.csv("C://Users/Maia.Kapur/Documents/hw5/heat_shock_subset.csv")
+
+##aggregate data to find means
+means = aggregate(formula = proportion ~ sex + region, data = hs, FUN = mean)
+
+##calculate standard error for sex and region
+se = aggregate(formula = proportion ~ sex + region, data = hs, FUN = function(x)
+  sqrt(var(x)/length(x)) )
+
+##create a list that contains the values from the above functions
+mu = c(means$proportion)
+stderrs = c(se$proportion)
+
+##plot it
+require(ggplot2)
+
+ggplot(means, aes(x = region, proportion, fill = sex)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymax = mu + stderrs, ymin = mu - stderrs), position = "dodge") +
+  ggtitle("Proportion Surivorship by Sex and Region") +
+  xlab("Region") +
+  ylab("Proportion") +
+  scale_fill_brewer(palette = "YlOrRd")
+```
+
+#####Fit a binomial glm where you test for effects of sex and region on the probability of surviving, as well as an interaction between sex and region. Remember there are two different ways to fit a binomial glm where n > 1. They are equivalent.
+
+```{r, warning=FALSE, message=FALSE}
+
+##for the binomial glm, you must have integer 0 or 1 values (1 = survived)
+##replace all non-zero values with 1
+hs$proportion[hs$proportion != 0] <- 1
+
+##fit binomial model for non-interaction
+hsmod.noint = glm(proportion ~ sex + region, data = hs, family = "binomial")
+hsmod.int = glm(proportion ~ sex * region, data = hs, family = "binomial")
+```
+
+#####Plot the fitted effects. How do you interpret the results?
+
+```{r, warning=FALSE, message=FALSE}
+
+require(effects)
+plot(allEffects(hsmod.noint), main = "Effect of Sex and Region on Proportion Survivorship")
+
+
+plot(allEffects(hsmod.int), main = "Interaction of Sex and Region on Proportion Survivorship")
+
+##There don't seem to be very different effects between the two groups; both have a lower prop. of male survivorship than female, and the SE overlaps both ranges.
+
+```
+#####Do a likelihood ratio test for the interaction between sex and region.
+```{r, warning=FALSE, message=FALSE}
+require(car)
+Anova(hsmod.int)
+```
+#####Oops, we didn't consider overdispersion. Fit the same model using the quasibinomial method. How big is the dispersion parameter?
+```{r, warning=FALSE, message=FALSE}
+require(car)
+##fit quasi-binomial lm
+hsqbin = glm(proportion ~ sex * region, data = hs, family = "quasibinomial")
+
+##define overdispersion parameter
+overdis  = function(model)	{
+		sum(residuals(model,	type	= "pearson")^2)/(length(model$y) - length(model$coefficients))
+}
+overdis(hsqbin) ##it's almost perfectly 1 (e.g. almost 0 overdisp.)
+```
+```
+#####Test the interaction with the quasibinomial model, using the F-test that accounts for the dispersion parameter. How do you interpret this result, compared to the result from the first model?
+```{r, warning=FALSE, message=FALSE}
+Anova(hsqbin, test = 'F')
+plot(allEffects(hsqbin), main = "Effects plot for Q-Binom distribution, Sex x Region")
+##this doesn't look very different from before -- likely cause overdispersion was so low
+```
+
+#####Test the main effects of the model (sex and region), using F-tests where the sex*region interaction is no longer in the 'full' model. What's your final take on these results? Are the results consistent with the researchers' hypothesis of local adaptation?
+
+```{r, warning=FALSE, message=FALSE}
+##For the interaction, Anova() compares the full model to a restricted model that has the interaction removed, and computes the likelihood ratio test. For the main effects (e.g. ‘logPar’), it first removes the interaction, and then compares the ‘full’ model with logPar to a restricted model that removes logPar. In other words, Anova() uses the model you give it to test the interaction, and it test the main effects assuming the interaction does not exist.
+Anova(hsqbin, test = 'F') 
+##the Anova() reveals that indeed, the interaction is non-significant. Sex is the most significant driver of survivorship, with region contributing to a lesser extent. So, it's consistent insofar as region having a mild effect on surivorship, but across regions sex prevails.
+```
