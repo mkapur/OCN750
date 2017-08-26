@@ -1,0 +1,243 @@
+---
+output: word_document
+---
+title: "OCN 750 -HW7"
+author: "Maia Kapur"
+date: "Wednesday, October 07, 2015"
+output: html_document
+---
+##Part 1
+##Assume a linear relationship between two variables. Because this is a simulation, it doesn't really matter what we call these variables. But to make it more concrete, imagine you are simulating the relationship between net primary production (NPP) and precipitation, for woody terrestrial plant ecosystems. Assume that the intercept of this relationship is 500 (g m-2 yr-1), the slope is 0.5, and that primary production is normally distributed around this line with a standard deviation of 500. The predictor (rainfall) is going to vary between 10 and 2000 mm yr-1. Use sample sizes of N = 5, 10, 20, 40, and 80. For each of these sample sizes, do the following simulation 1000 times: 1. Draw N numbers from a uniform distribution between 10 and 2000. This is precipitation.
+
+```{r}
+sizes = list(5,10,20,40,80) ##create a list of the sample sizes to use
+nsims = 1000
+intercept = 500
+slope = 0.5
+
+## set a timer
+p = proc.time()
+
+#make	a	vector	to	save	the	estimated	slope,	and	its	p-value
+slope.saved	= p.value.saved	= vector()
+pval.slope  = NULL
+
+for (s in sizes) {
+  for	(i	in	1:nsims)	{
+  		x.values <- runif(s, 10.0, 2000.0)
+##2. Calculate the expected NPP for these values of precipitation, using the assumed linear relationship.
+      expected.vals = intercept + slope*x.values
+##3. Use the expected NPP to draw random 'observed' values for NPP. These should be normally distributed with standard deviation 500.
+      observed.vals  = rnorm(length(expected.vals),	expected.vals,	sd = 500)
+##4. Fit a linear model for simulated NPP vs. precipitation.
+      mod	= lm(x.values ~ observed.vals)
+#save	the	slope	estimate, which is given in coef()
+  		slope.saved[i] = coef(mod)[2]
+#save	the	p	value	for	the	slope, given in the SUMMARY of the model coefficients
+  		p.value.saved[i]	= summary(mod)$coefficients[2,4]
+      pval.slope <- rbind(x = pval.slope, c(slope.saved[i], p.value.saved[i], s, i))
+}
+}
+colnames(pval.slope) <- c("slope", "pval", "sample_size", "sim_number")
+proc.time() - p 
+```
+
+## For each of the sample sizes, record the proportion of p-values (out of 1000 simulations) that are less than 0.05. Finally, plot the statistical power (proportion of significant p-values) vs. the sample size.
+```{r}
+props = NULL ## could also do prop = vector() but too lazy to type
+
+## Loop style
+for (s in sizes){
+  ##subset the data for each sample size (the third column is sample_size)
+  sub = subset(pval.slope, pval.slope[,3] == s) 
+  ##subset that subset for the # of significant p values
+  signif = nrow((subset(sub, sub[,2] < 0.05)))
+  ##divide by 1000 for the proportion
+  signif.prop = signif/1000
+  ##create a matrix indicating proportions by sample size
+  props = rbind(x = props, c(signif.prop, s))
+}
+plot(props[,1] ~ props[,2], pch = 19, xlab = "sample size", ylab = "proportion significant", main = "proportional significance vs sample size", col = "lavenderblush4", col.main = "lavenderblush4")
+
+
+## da kine [using pipes and dplyr]
+library(dplyr)
+## format as dataframe
+pvals = as.data.frame(pval.sloe)
+## this pipe filters out all the ones with p < 0.05, arranges them by sample size, and spits out a summary table showing the relative proportion of significant p values. This works because each one has the same # of values (1000). Would be a little more complicated if this varied.
+pvals %>% filter(pval < 0.05) %>% group_by(sample_size) %>% summarise(count = n()/1000)
+
+```
+
+#####How much does statistical power to detect this relationship change as the sample size changes?
+```{r}
+##the proportion of significant p values increases asymptotically with sample size. 
+```
+
+#####Also, make a plot of an example simulation for each of the sample sizes, to get sense for what you're simulating.
+
+```{r}
+par(mfrow = c(2,3))
+
+## base example
+for (s in sizes){
+x.values <- runif(s, 10.0, 2000.0) #this is just one simulation
+    ##2. Calculate the expected NPP for these values of precipitation, using the assumed linear relationship.
+      expected.vals = intercept + slope*x.values
+      ##3. Use the expected NPP to draw random 'observed' values for NPP. These should be normally distributed with standard deviation 500.
+      observed.vals  = rnorm(length(expected.vals),  expected.vals,	sd = 500)
+      ##4. Fit a linear model for simulated NPP vs. precipitation. 
+      plot(observed.vals ~ x.values, pch = 19, col = "lightsalmon2", main = paste0("N = ",s, " slope = 0.5"), xlab = "precip", col.main = "lightsalmon2")
+       #plot  the  expected	values	on	top
+       points(expected.vals ~ x.values,	pch	= 19, col = "lightsalmon 3")
+       #plot	the	true	relationship
+       abline(a	= intercept,	b	= slope,	pch = 19, col	= 'lightsalmon3', lwd = 2)
+       ##4. Fit a linear model for simulated NPP vs. precipitation.
+       mod	= lm(x.values ~ observed.vals)
+       abline(mod,	col	= 'lightsalmon2',	lwd	= 3)
+}
+par(mfrow = c(1,1))
+
+```
+##### Now repeat this whole process using a slope of 1 instead of a slope of 0.5. How much does this change in size effect change statistical power at low sample sizes?
+
+###For Slope = 1.0
+```{r}
+sizes = list(5,10,20,40,80) ##create a list of the sample sizes to use
+nsims = 1000
+intercept = 500
+slope =  1
+
+
+#make  a	vector	to	save	the	estimated	slope,	and	its	p-value
+slope.saved	= p.value.saved	= vector()
+pval.slope  = NULL
+
+for (s in sizes) {
+  for	(i	in	1:nsims)	{
+  		x.values <- runif(s, 10.0, 2000.0)
+##2. Calculate the expected NPP for these values of precipitation, using the assumed linear relationship.
+      expected.vals = intercept + slope*x.values
+##3. Use the expected NPP to draw random 'observed' values for NPP. These should be normally distributed with standard deviation 500.
+      observed.vals  = rnorm(length(expected.vals),	expected.vals,	sd = 500)
+##4. Fit a linear model for simulated NPP vs. precipitation.
+      mod	= lm(x.values ~ observed.vals)
+      #save	the	slope	estimate
+  		slope.saved[i] = coef(mod)[2]
+  		#save	the	p	value	for	the	slope
+  		p.value.saved[i]	= summary(mod)$coefficients[2,4]
+      pval.slope <- rbind(x = pval.slope, c(slope.saved[i], p.value.saved[i], s, i))
+}
+}
+colnames(pval.slope) <- c("slope", "pval", "sample_size", "sim_number")
+
+##For each of the sample sizes, record the proportion of p-values (out of 1000 simulations) that are less than 0.05. 
+##Finally, plot the statistical power (proportion of significant p-values) vs. the sample size.
+
+
+props = NULL
+for (s in sizes){
+  ##subset the data for each sample size
+  sub = subset(pval.slope, pval.slope[,3] == s)
+  ##subset that subset for the # of significant p values
+  signif = nrow(subset(sub, sub[,2] < 0.05))
+  ##divide by 1000 for the proportion
+  signif.prop = signif/1000
+  ##create a matrix indicating proportions by sample size
+  props = rbind(x = props, c(signif.prop, s))
+}
+
+plot(props[,1] ~ props[,2], pch = 19, xlab = "sample size", ylab = "proportion significant", main = "proportional significance vs sample size, slope = 1", col = "dodgerblue", col.main = "dodgerblue")
+
+```
+#####How much does statistical power to detect this relationship change as the sample size changes?
+```{r}
+##the proportion of significant p values increases asymptotically with sample size. 
+```
+#####Also, make a plot of an example simulation for each of the sample sizes, to get sense for what you're simulating.
+```{r}
+par(mfrow = c(2,3))
+for (s in sizes){
+x.values <- runif(s, 10.0, 2000.0) #this is just one simulation
+    ##2. Calculate the expected NPP for these values of precipitation, using the assumed linear relationship.
+      expected.vals = intercept + slope*x.values
+##3. Use the expected NPP to draw random 'observed' values for NPP. These should be normally distributed with standard             deviation 500.
+      observed.vals  = rnorm(length(expected.vals),  expected.vals,	sd = 500)
+      plot(observed.vals ~ x.values, pch = 19, col = "dodgerblue2", main = paste0("simulated NPP values vs. precipitation, N = ",s," slope = 1"), xlab = "precip", col.main = "dodgerblue3")
+#plot  the  expected	values	on	top
+       points(expected.vals ~ x.values,	pch	= 19, col = "dodgerblue3")
+#plot	the	true	relationship
+       abline(a	= intercept,	b	= slope,	pch = 19, col	= 'dodgerblue3', lwd = 2)
+##4. Fit a linear model for simulated NPP vs. precipitation.
+       mod	= lm(x.values ~ observed.vals)
+       abline(mod,	col	= 'dodgerblue3',	lwd	= 3)
+}
+par(mfrow = c(1,1))
+```
+##Part 2
+#####Fit a poisson GLM for possum count vs. stags. Make a scatterplot of the raw data, and plot the fitted curve on top of it. Make a plot of residuals vs. fitted values. 
+```{r, warning = FALSE, message = FALSE}
+
+setwd("C:/Users/Maia.Kapur/Downloads")
+possum = read.csv("possum.csv")
+
+##generate the poisson glm
+countstag = glm(data = possum, lb ~ stags, family = "poisson")
+
+##plot of raw data
+plot(data = possum, lb ~ stags, pch = 19, col = "darkseagreen3", main = "no. stags vs possum count", col.main = "darkseagreen3")
+abline(countstag, lwd = 2, col = "darkseagreen3")
+
+##plot of residuals
+plot(resid(countstag) ~ fitted(countstag), pch = 19, col = "darkseagreen4", main = "residuals vs fitted values for poisson glm", col.main = "darkseagreen4")
+
+```
+
+#####Use the simulate() function to simulate a vector of counts from the fitted model.  If you do simulate(your.model), it will generate a dataframe with one column. That column is the simulated data.
+
+#####Plot the simulated data vs. stags. Fit a poisson GLM for the simulated data vs. stags, and use that to plot the fitted curve. Plot the residuals vs. fitted values. Repeat this process a total of 4 times.
+
+```{r}
+
+par(mfrow = c(2,4))
+##a loop to do the simulation and make 2 plots (sim. vs raw and resid vs fitted) four times
+for (i in 1:4){
+  simdat = simulate(countstag)
+  mod = glm(stags ~ as.matrix(simdat), data = possum, family = "poisson")
+  plot(as.matrix(simdat) ~ stags, data = possum, pch = 19, col = "darkslateblue", main = "simulated vs counts", col.main = "darkslateblue", cex.main = 0.85)
+  abline(mod, lwd = 3, col = "darkslateblue")
+  #curve(exp(coef(mod)[1] + coef(mod)[2]*x), add = T, lwd = 3, col = "darkslateblue")
+  plot(resid(mod) ~ fitted(mod), col = "darkslategray", main = "residuals vs fitted vals", col.main = "darkslate gray", pch = 19, cex.main = 0.85)
+  }
+
+```
+
+
+#####Based on these simulated datasets, and your visual assessment, does it look like the residuals from the real data have adistribution that is consistent with a poisson model?
+
+```{r}
+##Not really. In all cases the line seems too shallow, and the residuals are not normally distributed at all.
+```
+#####Visual model assessment is useful, but can't tell you everything. Based on what I did in lecture, we know that the data are zero-inflated. We can use simulation to get a sense for how many 'extra' zeros there are. Use simulate() to generate 1000 simulated vectors of data from the poisson GLM for possums vs. stags. You can do this with simulate(your.model, nsim = 1000). Now you have a dataframe with 1000 columns, and each column is a simulated dataset.
+```{r}
+sims = simulate(countstag, nsim = 1000)
+```
+#####Calculate how many zeros there are in each of the 1000 simulated datasets. The apply() function is your friend here. Make a histogram of #zeros across the 1000 datasets. How does this distribution of #zeros compare to the #zeros in the real data?
+```{r}
+
+#apply a function to each column of the 1000 sims
+zero_sims = apply(sims, 2, FUN = function(df){ sum(df == 0)})
+##histogram of simulated data
+par(mfrow = c(2,1))
+
+hist(zero_sims, breaks = 10, main = "histogram of #zero distribution in simulated data", col = "darkred", col.main = "darkred")
+hist(possum$lb, breaks = 10, main = "histogram of count distribution in real data", col = "firebrick", col.main = "firebrick")
+
+##ggplot version
+library(Rmisc)
+tots = qplot(zed.totals.sims)
+real = qplot(possum$lb)
+multiplot(tots,real)
+##in both cases there are still mostly zero counts
+```
+

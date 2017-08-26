@@ -1,10 +1,8 @@
 ---
 title: 'OCN 750: Homework 1 -- Heat Shock'
-date: 
 author: Maia Kapur
-output: html_notebook
+output: html_document
 ---
-
 
 ```{r, warning = FALSE, message = FALSE}
 #Load Required Packages
@@ -14,7 +12,7 @@ library(effects)
 library(ggplot2)
 ```
 
-# Question 1: Boxplot of Mean Length by Sex and Region
+####Question 1: Boxplot of Mean Length by Sex and Region
 
 ```{r}
 #Load appropriate CSV
@@ -55,7 +53,7 @@ ggplot(df, aes(x = variable, value, fill = experiment)) +
 ```
 
 
-# 2. Use lm(), and F-tests on the model, to test whether there is a significant difference between Sexes in mean length, whether there is a significant difference between Regions in mean length, and whether the effect of Region differs between Sexes. Report F-statistics and degrees of freedom. How do you interpret these results?
+#### 2. Use lm(), and F-tests on the model, to test whether there is a significant difference between Sexes in mean length, whether there is a significant difference between Regions in mean length, and whether the effect of Region differs between Sexes. Report F-statistics and degrees of freedom. How do you interpret these results?
 
 ```{r}
 #Generate a linear model for variables of interest, testing for an interaction between the Sex and Region Factors
@@ -70,13 +68,13 @@ Anova(lsr.interaction)
 #It appears there is a significant difference in between sexes and regions in mean length, but a non-significant difference of Region's effect between sexes. Upon visual inspection, this appears to make sense; both Males and Females exhibit higher mean lengths in the North than the South.
 ```
 
-# 3. Plot the model-fitted group means and standard errors.
+#### 3 Plot the model-fitted group means and standard errors.
 
 ```{r, echo = TRUE}
 plot(culteff)
 ```
 
-# 4: Using the `eggdata`� worksheet, plot Number of Eggs vs. Length, and color code the plotted points by Region.
+#### 4: Using the “Egg Data” worksheet, plot Number of Eggs vs. Length, and color code the plotted points by Region.
 
 ```{r}
 eggs = read.csv('C:/Users/Maia.Kapur/Documents/hw1/eggdata.csv')
@@ -108,7 +106,7 @@ ggplot(data=eggs, aes(x=Length..mm., color = Region)) +
   ggtitle("Number of Eggs vs Length in Two Regions")
 ```
 
-# 5. Fit a linear model to test whether the relationship between Number of Eggs and Length differs between Regions. Perform and report the appropriate F-test to test this question. How might you interpret these results?
+#### 5. Fit a linear model to test whether the relationship between Number of Eggs and Length differs between Regions. Perform and report the appropriate F-test to test this question. How might you interpret these results?
 
 ```{r}
 #Create a linear model that incorporates both the number of eggs and length for each region
@@ -120,7 +118,7 @@ summary(lmr)
 #There is a significant difference for No. Eggs across lengths and among the two regions.
 ```
 
-# 6. For #5 you have essentially fit two linear regressions, one for each Region. Take your plot from #4 and add these two lines. abline() will help.
+####6. For #5 you have essentially fit two linear regressions, one for each Region. Take your plot from #4 and add these two lines. abline() will help.
 
 ```{r, echo=TRUE}
 ggplot(data=eggs, aes(x=Length..mm., color = Region, group = 1)) +
@@ -133,7 +131,7 @@ ggplot(data=eggs, aes(x=Length..mm., color = Region, group = 1)) +
   ggtitle("Number of Eggs vs Length in Two Regions")
 ```
 
-# 7. Model diagnostics: for the model you fit in #5, make some plots that explore whether the residuals of the model are normally distributed, whether the variance of the residuals increases as Length increases, and whether the variance of the residuals varies between regions.
+#### 7. Model diagnostics: for the model you fit in #5, make some plots that explore whether the residuals of the model are normally distributed, whether the variance of the residuals increases as Length increases, and whether the variance of the residuals varies between regions.
 
 ```{r, echo = TRUE}
 #Plot to inspect distribution of residuals
@@ -143,7 +141,7 @@ abline(0,0)
 #The residuals themselves appear normally distributed, with deviation from normality at the tails of the distribution.
 ```
 
-# Variance of Residuals vs Length
+#Variance of Residuals vs Length
 ```{r, echo = TRUE}
 #Calculate model residuals & add to data frame
 lmr.residual = resid(lmr)
@@ -155,7 +153,7 @@ abline(0,0)
 #The above plot suggests that variance in residuals increases with length.
 ```
 
-# Variance of Residuals between Regions
+#Variance of Residuals between Regions
 ```{r, echo=TRUE}
 boxplot(eggs$lmr.residual ~ eggs$Region,
         main = "Variance of Residuals between Regions",

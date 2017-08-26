@@ -1,0 +1,67 @@
+ ---
+title: "OCN 750 - HW13"
+author: "Maia Kapur"
+date: "Wednesday, November 18, 2015"
+output: html_notebook
+---
+####The question to ask is whether MHT actually causes the location of the marsh zones to shift from year to year. Start by just analyzing the zone M. Make some exploratory plots of Distance over time, and Distance vs. MHT. What do the patterns look like?
+```{r}
+marsh = read.csv('marsh_time_series.csv')
+zonem = subset(marsh, marsh$Zone == 'M')
+par(mfrow = c(1,2))
+plot(Distance ~ Year, data = zonem, main = "distance vs. year", col = marsh[,"Zone"])
+plot(MHT ~ Distance, data = zonem, main = "distance vs. MHT", col = zonem[,"Zone"])
+
+## it's hard to see any correlation here. Perhaps a slight negative trend in both plots (distance over time, mht over distance).
+```
+####Fit a linear model for Distance vs. MHT (just for zone M). Make an autocorrelationplot for the residuals of this model; does it look like the residuals are autocorrelated?
+
+```{r, warning = FALSE, message = FALSE}
+dev.off()
+mmht = lm(Distance ~ MHT, data = zonem)
+acf(resid(mmht)) 
+## there only appears to be autocorrelation for the first time lag.
+
+```
+####Fit a generalized least squares model instead, using an AR(1) model for the residuals. Does this model account for the autocorrelation? What is the estimate for phi? Does the GLS model affect your inference about whether MHT affects the distance of the marsh zone?
+```{r}
+## applying AR1 correlation model within gls(); using Time Series data (not Distance)
+require(nlme)
+mod.gls1 = gls(Distance ~ 1 + MHT, data = zonem, correlation = corAR1(form = ~Year))
+summary(mod.gls1)
+## it defaults to value = 0, or no autocorrelation.
+## However, it appears MHT is an insignificant predictor of "distance" (which is where they're located)
+
+require(geoR)
+#v1 = variog(coords = zonem[,'Distance'], data = resid(mod.gls1, type = "normalized")) ## not east, north
+
+```
+####Now we'll use the data from all three zones. If there is a general effect across zones, this should be better estimated by using all the data. But we need to account for autocorrelation within each zone's time series. Fit a GLS model to the data from all three zones, including predictors for MHT as well as the difference between zones in mean Distance. To model the autocorrelation within each zone, you can use AR(1) with a grouping factor, as described in ?corAR1. 
+```{r}
+mod.gls2 = gls(Distance ~ MHT + Zone, data = marsh, correlation = corAR1(form = ~Year|Zone))
+```
+####What does the model say about the effect of MHT, when pooling all the zones (you can use  anova(model, type = "marginal") to get marginal F-tests for a gls() model)? How about the difference among zones? Does this model successfully account for any autocorrelation? To assess this you'll need to plot zone-specific ACFs.
+```{r}
+anova(mod.gls2, type = 'marginal')
+summary(mod.gls2)
+## Looks like the effect of MHT is significant, along with the differences among zones.
+par(mfrow = c(3,1))
+## Plot zone-specific ACFs.
+acf(resid(mod.gls2)[mod.gls2$groups == 'M'], main = "Zone M")
+acf(resid(mod.gls2)[mod.gls2$groups == 'P'], main = "Zone P")
+acf(resid(mod.gls2)[mod.gls2$groups == 'PP'], main = "Zone PP")
+```
+####Maybe the effect of MHT differs among the zones; make an additional model that tests this.
+```{r}
+mod.gls3 = gls(Distance ~ MHT*Zone, data = marsh, correlation = corAR1(form = ~Year|Zone))
+##grouping factor for MHT zone
+```
+####Maybe we could account for temporal autocorrelation with a temporal smoother instead. Using just the zone M data, fit a GAM with a smoother for the temporal trend, while also including MHT as a predictor. What does the model look like?  Does it successfully account for temporal autocorrelation?
+```{r}
+require(mgcv)
+mod.gam = gam(Distance ~ s(Year) + MHT, data = zonem)
+summary(mod.gam)
+acf(resid(mod.gam), type = "partial") ## there is no temporal autocorrelation
+plot.gam(mod.gam)
+```
+
