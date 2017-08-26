@@ -1,0 +1,232 @@
+---
+title: "OCN 750 HW 4 -- Amphibian Roadkill"
+author: "Maia Kapur"
+date: "Thursday, September 17, 2015"
+output: html_document
+---
+```{r}
+#Set wd and load data table
+roadkill = read.table("C:/Users/Maia.Kapur/documents/hw4/RoadKills.txt", header = TRUE, colClasses = "numeric")
+```
+
+##### Plot TOT.N vs. the other variables I mentioned.  TOT.N, D.PARK,   URBAN, D.WAT.RES. URBAN is highly skewed.
+```{r, message = FALSE, warning = FALSE}
+#set up graphing device
+par(mfrow = c(2,2))
+
+#create index of which columns we want to plot against TOT.N
+colnums = c(13,18,20)
+
+#a for-loop to plot each value quickly. URBAN is, indeed, quite skewed.
+for (v in colnums){
+plot(roadkill$TOT.N ~ roadkill[,v], xlab = names(roadkill[v]) , ylab = "Total Roadkills", col = "indianred3")
+}  
+#dev.off()
+```
+
+##### Make a column where this predictors is square-root transformed,and plot the relationships with the new predictors. 
+```{r, message = FALSE, warning = FALSE}
+#Create three new columns for the square-root transformations
+roadkill[24] = NA
+
+#designate their names and replace "V24" etc
+newcols = c("urb_sqrt")
+names(roadkill)[24] = newcols
+
+#do it manually...
+sqrt(roadkill$URBAN) -> roadkill[24]
+
+head(roadkill)[24]
+
+#a for-loop to plot the new transformed values against TOT.N.
+dev.off()
+newnums = c(13,18,24)
+par(mfrow = c(2,2))
+for (k in newnums){
+plot(roadkill$TOT.N ~ roadkill[,k], xlab = names(roadkill[k]) , ylab = "Total Roadkills", col = "hotpink4")
+}  
+#dev.off()
+```
+
+
+#####Fit a Poisson GLM to test if total number of roadkills is predicted by D.PARK. Plot the raw relationship and plot the fitted curve on top of it. Plot residuals vs. the predictor: use both the raw (response) residuals and the deviance residuals. 
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+require(stats)
+#create your Poisson GLM using the square-root transformed values
+#I've noticed that for the Effects package to work, you need to separate the data from the field names.
+#(No $ signs!)
+poipark = glm(TOT.N ~ D.PARK, data = roadkill, family = poisson)
+
+#Plot a curve using generated coefficients against the data
+par(mfrow = c(3,1))
+plot(roadkill$TOT.N ~roadkill$D.PARK, xlab = "D.PARK" , ylab = "Total Roadkills", col = "hotpink1", main = "Total Kills vs DPark", cex.main = 1.5)
+curve(exp(coef(poipark)[1]+coef(poipark)[2]*x),  col	= 'hotpink2',	lwd	= 4, xlab = "D.PARK", ylab = "Total Kills", add = TRUE)
+
+#Plot of raw residuals against predicted values based on regression (these are extracted via fitted())
+plot(residuals(poipark,	type	= "response")	~ fitted(poipark),	ylab	= "raw	residuals",	xlab	= "predicted	value", col = "hotpink3", main = "Predicted Values vs. Raw Residuals", cex.main = 1.5)
+abline(h	= 0,	lty	= 2,	lwd	= 4,	col	= 'hotpink4')
+
+#Same as above, but with deviance (Pearson) residuals
+plot(residuals(poipark,  type	= "pearson")	~ fitted(poipark),	ylab	= "pearson	residuals",	xlab	= "predicted	value", main = "Predicted Values vs. Pearson (Deviance) Residuals", cex.main = 1.5, col = "indianred1")
+abline(h	= 0,	lty	= 2,	lwd	= 4,	col	= "indianred2")
+```
+
+
+#####Are there any strong patterns? How do the raw and deviance residuals differ, and why? 
+```{r}
+#The deviance residuals are more constrained, though they don't seem to differ greatly from the pattern. There is a clear negative, potentially logarithmic relatoinship between the predictor and response variable, with variance appearing to increase with D.Park. This would explain the tighter relationship between values and residuals at lower values of D.Park.
+```
+
+#####Do a likelihood ratio test to test for the significance of the predictor.
+```{r, message = FALSE, warning = FALSE, echo = TRUE}
+require(car)
+require(effects)
+Anova(poipark)
+```
+
+#####Fit the same model with quasipoisson, and with a negative binomial distribution.
+```{r, message = FALSE, warning = FALSE, echo = TRUE}
+#create your Quasi - Poisson GLM using the square-root transformed values
+qpoipark = glm(TOT.N ~ D.PARK, data = roadkill, family = quasipoisson)
+
+#Create the negative binomial model
+require(MASS)
+negbpark = glm.nb(TOT.N ~ D.PARK, data = roadkill)
+
+#Plot them all together
+par(mfrow = c(3,1))
+#This looks very different from the example in class.
+plot(allEffects(poipark), main = "Poisson-Distributed Model (dpark)", col = "darkseagreen1")
+plot(allEffects(qpoipark), main = "QuasiPoisson-Distributed Model (dpark)", col = "darlseagreen2")
+plot(allEffects(negbpark), main = "Negative Binomial Model (dpark", col = "darkseagreen3")
+```
+
+#####Do appropriate hypothesis tests on these models. 
+```{r, message = FALSE, warning = FALSE}
+#A bootstrapping may be more approriate, but here we do a  Likelhihood Ratio Test (X2 distributed).
+#A t-test would assume normal error (analogous to Wald test).
+#The LRT is quickly summarized by Anova()
+
+#Here I run the test and pin it to a new data frame. All three indicate significance.
+LRT = cbind(Anova(poipark)[1],
+Anova(qpoipark)[1],
+Anova(negbpark)[1])
+names(LRT)[1:3] = c("poisson", "qpoisson", "negbinom")
+LRT
+
+```
+
+#####How big is overdispersion based on the quasipoisson? 
+```{r, message = FALSE, warning = FALSE}
+#dispersion  parameter	function - this way you can quickly quantify Phi based on whatever glm you used.
+overdis	= function(model)	{
+		sum(residuals(model,	type	= "pearson")^2)/(length(model$y) - length(model$coefficients))
+}
+overdis(qpoipark) #Phi is quite high
+
+```
+
+#####What is the theta parameter for the negative binomial?
+```{r, message = FALSE, warning = FALSE}
+theta = overdis(negbpark)
+theta #much smaller
+```
+#####Does overdispersion affect the conclusions you would draw from this analysis?
+
+```{r}
+#Our Phi value was pretty high even for the QPoisson.
+#Looks like the negative binomial model successfully accounts for the overdispersion, as the Theta value is well under 1.5.
+```
+
+#####Now fit a Poisson model that adds in the other two predictors, URBAN (squareroot transformed) and D.WAT.RES. 
+```{r, message = FALSE, warning = FALSE}
+poi.urwapa = glm(TOT.N ~ urb_sqrt + D.WAT.RES + D.PARK, data = roadkill, family = "poisson")
+summary(poi.urwapa)
+```
+
+#####What is effect size of the 3 different predictors, i.e. how much does # roadkills change as these predictors vary? How do residuals vs. fitted values and residuals vs. predictors look (you can just use deviance or pearson residuals, as they are more appropriate for GLMs)? Do appropriate (marginal) likelihood ratio tests for each of the three predictors. 
+```{r, message = FALSE, echo = TRUE, warning = FALSE}
+#The effect of each of these predictors is given by the ANOVA.
+Anova(poi.urwapa) #it appears that Dpark is still the highest influence upon the model.
+
+#Plot of fitted values vs. deviance (Pearson) residuals
+plot(residuals(poi.urwapa,  type	= "pearson")	~ fitted(poi.urwapa),	ylab	= "pearson	residuals",	xlab	= "predicted	value", main = "Pearson (Deviance) Residuals vs Fitted Values", cex.main = 1.5, col = "indianred1")
+abline(h	= 0,	lty	= 2,	lwd	= 4,	col	= "indianred2")
+
+#Plot of sqrt-transformed predictor values vs. deviance (Pearson) residuals for three variables
+par(mfrow = c(3,1))
+
+#raw urban values
+plot(residuals(poi.urwapa,  type  = "pearson")	~ roadkill$urb_sqrt,	ylab	= "pearson	residuals",	xlab	= "URB.sqrt Raw", main = "Pearson (Deviance) Residuals vs Predicted Values", cex.main = 1.5, col = "firebrick1")
+abline(h	= 0,	lty	= 2,	lwd	= 4,	col	= "indianred2")
+
+#raw dwat values
+plot(residuals(poi.urwapa,  type  = "pearson") ~ roadkill$D.WAT.RES, xlab = "D.WAT.RES Raw", col = "firebrick2")
+abline(h  = 0,	lty	= 2,	lwd	= 4,	col	= "indianred2")
+
+#raw dpark values
+plot(residuals(poi.urwapa,  type  = "pearson") ~ roadkill$D.PARK, xlab = "D.PARK Raw", col = "firebrick3")
+abline(h  = 0,	lty	= 2,	lwd	= 4,	col	= "indianred2")
+
+dev.off()
+
+```
+
+#####Plot the fitted effects using the 'effects' package. How do you interpret these results?
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+par(mfrow = c(1,2))
+#This looks very different from the example in class.
+plot(allEffects(poi.urwapa), main = "Poisson-Distributed Model", col = "darkseagreen1")
+
+```
+
+#####Now fit the same model with quasi-Poisson and negative binomial. Plot the fittedeffects using the 'effects' package. How similar are the parameter estimates between Poisson, quasi-Poisson, and negative binomial model? 
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+#create your Quasi - Poisson GLM using urban square-root transformed values
+qpoi.urwapa = glm(TOT.N ~ urb_sqrt + D.WAT.RES + D.PARK, data = roadkill, family = quasipoisson)
+
+#Create the negative binomial model using all transformed values
+require(MASS)
+negb.urwapa = glm.nb(TOT.N ~ urb_sqrt  + D.WAT.RES + D.PARK, data = roadkill)
+
+par(mfrow = c(4,3))
+#plot for quasi-poisson using "all effects"
+plot(allEffects(qpoi.urwapa), main = "QuasiPoisson-Distributed Model", col = "darlseagreen2")
+
+#same as above for negative bionamial
+plot(allEffects(negb.urwapa), main = "Negative Binomial Model", col = "darkseagreen3")
+#dev.off()
+
+#The parameter estimates appear to vary greatly amongst model families as well as variables.
+```
+
+
+#####How similar are hypothesis test results for the three models? Why do you think these results would differ from what you found for #3?
+```{r, message = FALSE, warning = FALSE}
+#This table shows the results from the Anova function for all three variables across all three models.
+#As suggested by the narrowness of the CI for the above plots, D.Park is the only significant predictor for Tot.n
+LRT = cbind(Anova(poi.urwapa)[1],
+Anova(qpoi.urwapa)[1],
+Anova(negb.urwapa)[1])
+names(LRT)[1:3] = c("poisson", "qpoisson", "negbinom")
+LRT
+
+
+```
+
+##### Let's go back to a model with just TOT.N vs D.PARK. Fit a standard linear regression for this relationship, i.e. with normally distributed error. Plot the data and the fitted relationship. 
+```{r, echo = TRUE, message = FALSE, warning = FALSE}
+#a standard linear model of the two variables
+totpark = lm(TOT.N ~ D.PARK, data = roadkill)
+
+plot(TOT.N ~ D.PARK, data = roadkill, col = "chartreuse4", main = "Standard LM for Total Kills vs D.Park", xlab = "D.PARK.", ylab = "Total Kills")
+abline(coef= coefficients(totpark), col = "cadetblue4")
+```
+
+#####Plot residuals vs. fitted values. Based on these plots, do you think this model is a good alternative for this data? Explain why you think yes/no.
+```{r, message = FALSE, warning = FALSE}
+plot(residuals(totpark,  type	= "response")	~ fitted(totpark), xlab = "dpark fitted values", ylab = "residuals", col = "seagreen4", main = "Standard LM - residuals vs fitted values")
+abline(h=0, col = "cadetblue4")
+
+#While the general LM seems to fit alright for higher levels of DPark, the residuals have a "funnel" shape which indicates the variance is not normally distributed. It is likely a bad choice to select this model type while the other tests don't retain an assumption of normality.
+```

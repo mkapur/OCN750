@@ -1,0 +1,84 @@
+---
+title: "OCN 750 - HW15"
+author: "Maia Kapur"
+date: "Friday, December 04, 2015"
+output: html_notebook
+---
+####You're just going to fit a single model that contains all the predictors used to test the authors' hypotheses. This will be the same model you fit for #2 in the assignment. 
+
+```{r, message = F, warning = F}
+require(MCMCglmm)
+zoo = read.csv("zooplankton_size_diversity.csv")
+
+names(zoo)[7] <- "response"
+names(zoo)[8] <- "size.div"
+names(zoo)[9] <- "NBSS"
+names(zoo)[10] <- "shannon"
+names(zoo)[11] <- "fish.larvae"
+names(zoo)[12] <- "water.temp"
+names(zoo)[13] <- "nitrate"
+Cruise <- as.factor(zoo$Cruise)
+
+##Fit the model using MCMCglmm. Instead of the default MCMC settings, make it so that there is zero 'burn-in', 1000 total iterations, and no thinning of the markov chain.
+mcmc.mod = MCMCglmm(response ~ size.div + NBSS + shannon + fish.larvae + water.temp + nitrate + Cruise, data = zoo, burnin = 0, nitt = 1000, thin = 1)
+
+```
+####Plot traceplots and acfplots for the model parameters.Does it look like the algorithm has converged, and is yielding independent samples of the posterior distribution?
+```{r, message = F, warning = F}
+plot(mcmc.mod$VCV)
+acfplot(mcmc.mod$VCV)
+## There appears to be a sinoidal pattern in the acf, so I wouldn't say they are completely independent, though the acf values are pretty small. The trace plot suggests convergence.
+```
+#### Fit a second MCMC run, and plot the traces of the two markov chains on top of each other using mcmc.list and plot(). Do they look like they're traversing the same regions of parameter space?
+```{r, message = F, warning = F}
+mcmc.mod2 = MCMCglmm(response ~ size.div + NBSS + shannon + fish.larvae + water.temp + nitrate + Cruise, data = zoo, burnin = 0, nitt = 1000, thin = 1)
+chainlist = mcmc.list(mcmc.mod$VCV, mcmc.mod2$VCV)
+plot(chainlist)
+## yes, they look like they're in the same regions.
+```
+####Even if it looks like it converged, using a burn-in of 0 with no thinning is a pretty optimistic approach, so re-fit the model using a burn-in of 3000, a total # iterations of 13,000, and a thinning interval of 10. What are the posterior means and 95% credible intervals for the parameters? Use HPDinterval() to get 99% credible intervals for the parameters. Which parameters have a 99% probability of being greater than zero, or less than zero?
+```{r}
+mcmc.mod3 = MCMCglmm(response ~ size.div + NBSS + shannon + fish.larvae + water.temp + nitrate + Cruise, data = zoo, burnin = 3000, nitt = 13000, thin = 10)
+summary(mcmc.mod3)
+
+## a for loop to generate a matrix of HPD 99% Credible Intervals, and a TRUE/FALSE indicator of which params are 99% likely to be >< 0
+
+probs = NULL
+HPD = NULL
+for (n in c(2,8:12)){
+  if (sum(mcmc.mod3$Sol[,n] > 0)/nrow(mcmc.mod3$Sol) >= 0.99){
+    probs <- append(probs, paste0(names(zoo)[n], " > 0"))
+    }
+    else if (sum(mcmc.mod3$Sol[,n] < 0)/nrow(mcmc.mod3$Sol) >= 0.99){
+      probs <- append(probs, paste0(names(zoo)[n], "< 0"))
+   }
+  else{
+      probs <-  append(probs, paste0(names(zoo)[n], " inconclusive"))
+    }
+   HPD = append(HPD, paste0(names(zoo)[n]," ",HPDinterval(mcmc.mod3$Sol[,n], prob = 0.99)))
+  }
+
+HPD
+probs
+## Cruise, NBSS, and water.temp all have a high probability of being greater than zero. None have a 99% probability of being less than 0.
+
+```
+####Maybe for some reason you're really interested in whether the effect of size.diversity is greater than 0.25 (I just made this number up). This is the kind of thing that is easy to quantify in a bayesian framework. What is the probability that the size.diversity parameter is greater than 0.25, based on the posterior samples?
+```{r}
+sum(mcmc.mod3$Sol[,"size.div"] > 0.25)/nrow(mcmc.mod3$Sol)
+## ~ 74%
+```
+####Fit the same model with the likelihood/frequentist approach we've been using throughout the class, i.e. how you fit it for HW 9. Compare the MLEs to the posterior mean parameter estimates, and compare the 95% frequentist confidence intervals to the 95% bayesian credible intervals. How similar are they?
+```{r}
+mod.all = glm(response ~ size.div + NBSS + shannon + fish.larvae + water.temp + nitrate + Cruise, data = zoo, na.action = na.pass)
+## Parameter MLEs
+summary(mod.all)$coefficients[,1]
+confint(mod.all)
+
+mean(mcmc.mod3$VCV)
+
+summary(mcmc.mod3)
+## The values are nearly identical.
+
+```
+

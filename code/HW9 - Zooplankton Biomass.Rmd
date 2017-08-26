@@ -1,0 +1,95 @@
+---
+title: "OCN 750 -HW9"
+author: "Maia Kapur"
+date: "October 22, 2015"
+output: word_document
+---
+####Make six linear models, each model having one of the six predictors. Plot the raw relationships and fitted lines, and report R2. Make a table of AICc, delta-AICc, and Akaike weights for the six models. How do you interpret these results in light of the authors’ hypotheses?
+```{r}
+zoo = read.csv("c://users/mkapur/dropbox/2015 Fall/ocn 750/hw9/zooplankton_size_diversity.csv")
+## change variable names from "Log10.Zoo.Phytoplankton.biomass.ratio." to "response"
+## also change "Log10.x.1..transformed.fish.larvae.density..ind..m3." to fish.larvae
+## also change "Zooplankton.size.diversity" to "size.div"
+names(zoo)[7] <- "response"
+names(zoo)[8] <- "size.div"
+names(zoo)[9] <- "NBSS"
+names(zoo)[10] <- "shannon"
+names(zoo)[11] <- "fish.larvae"
+names(zoo)[12] <- "water.temp"
+names(zoo)[13] <- "nitrate"
+## construct LMs using NO3 as nutrient of choice
+lm.zsd = lm(response ~ size.div + as.factor(Cruise), data = zoo)
+lm.nbss = lm(response ~ NBSS + Cruise, data = zoo)
+lm.shan = lm(response ~ shannon + factor(Cruise), data = zoo)
+lm.fish = lm(response ~ fish.larvae + factor(Cruise), data = zoo)
+lm.watr = lm(response ~ water.temp + factor(Cruise), data = zoo)
+lm.nit = lm(response ~ nitrate + factor(Cruise), data = zoo)
+
+## set up vectors for looping that include  each column
+variables = cbind(zoo$size.div, zoo$NBSS, zoo$shannon, zoo$fish.larvae, zoo$water.temp, zoo$nitrate)
+names(variables)[1:6] = c("size", "nbss", "shannon", "fish.larvae", "water.temp", "nitrate")
+linear.mods = list(lm.zsd, lm.nbss, lm.shan, lm.fish, lm.watr, lm.nit)
+
+
+#a for loop for the plots. R-square is in top right corner
+par(mfrow = c (2,3))
+for (v in 1:ncol(variables)){
+    plot(response ~ variables[,v], data = zoo, main = paste0("vs. ", names(variables)[v]), ylab = "zooplankton biomass ratio", xlab = names(variables)[v])
+    mod = linear.mods[[v]]
+    abline(coef(mod)[1], coef(mod)[2], col = "dodgerblue4", lwd = 3)
+    legend("topright", bty="n", legend=paste("R2 is", format(summary(mod)$adj.r.squared, digits=4)), col = "dodgerblue4")
+}
+
+require(MuMIn)
+
+## Create AIC model selection table
+modsel = model.sel(linear.mods)
+head(modsel)
+
+```
+####Testing the hypotheses separately has a nice clarity to it, but the hypotheses are not mutually exclusive, and support for one predictor may change when it is competing against another predictor in the same model. This is especially likely when the predictors are partially correlated (e.g. the different zooplankton diversity measures). Make one model that has all the predictors, and plot the fitted effects as well as residual diagnostics. Test the importance of the predictors using LRTs. How do these results differ from those found in #1? What are the implications for the authors’ hypotheses? Why do you think the results might differ?
+```{r}
+## make Cruise a factor OUTSIDE of model so that "effects" can properly plot
+Cruise <- as.factor(zoo$Cruise)
+
+mod.all = glm(response ~ size.div + NBSS + shannon + fish.larvae + water.temp + nitrate + Cruise, data = zoo, na.action = na.pass)
+
+require(effects)
+
+plot(allEffects(mod.all))
+```
+
+
+####Testing the predictors in one big model is nice, but we might be concerned that this is not the ??best  model and that effect estimates in the best?? model might differ from those in the full model. Use dredge() and model.sel() to compare all possible models with these predictors. (Note, you can make sure Cruise is in all models by specifying fixed = ~ Cruise, in the dredge() function).
+```{r}
+modall.dredge = dredge(mod.all, fixed = ~ Cruise)
+best.dredge = subset(modall.dredge, delta <= 3)
+head(best.dredge)
+head(modsel)
+step(mod.all)
+```
+####What does the distribution of Akaike weights look like? 
+```{r}
+dev.off()
+hist(best.dredge$weight, breaks = 20, main = "distribution of Akaike weights")
+```
+####By comparing the models that have some support from the data, which predictors do you think are important? 
+```{r}
+mod.goods = glm(response ~ size.div + NBSS + shannon + nitrate + Cruise, data = zoo, na.action = na.pass)
+require(car)
+## The best models according to dredge have nitrite and size.div, with the next-best models adding on Shannon then NBSS.
+## The modsel and step (AICc) functions also show those variables holding importance in the same descending order.
+Anova(mod.goods)
+## the LRT for the "dropped" model also reinforces that size.div has the highest impact, closely followed by Cruise and nitrrate.
+plot(allEffects(mod.goods))
+```
+
+####What are the variable importances calculated from the Akaike weights?
+```{r}
+importance(linear.mods)
+```
+
+####Do the effect estimates vary much across models? Do your conclusions from this information theory, all-models approach differ from your conclusions from the one big- model, null-hypothesis-testing approach? What are your final thoughts about the authors? hypotheses and their relative merits?
+```{r}
+## there doesn't seem to be much variance across models (qualitatively). I think that their hypotheses are difficult to test given that there is only "significant" support for size.div, nitrate and cruise, meaning that the NBSS and shannon measures, while "helpful" to the model, are likely to correlated to tease out any weakening/strengtheninig effects.
+```
